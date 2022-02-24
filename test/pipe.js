@@ -132,3 +132,37 @@ tape('pipe with callback', function (t) {
   r.push('world')
   r.push(null)
 })
+
+tape('pipe "live" stream', function (t) {
+  const buffered = []
+  const expected = []
+  let counter = 0
+
+  const r = new Readable({
+    read (cb) {
+      // choose 20 since > default highWaterMark (16) for an object stream
+      if (counter > 20) {
+        this.emit('now-paused')
+        // simulate "live" stream awaiting data
+        return this.on('non-existent-event', cb)
+      }
+      expected.push({ counter })
+      this.push({ counter })
+      counter++
+      cb()
+    }
+  })
+  const w = new Writable({
+    write (data, cb) {
+      buffered.push(data)
+      cb(null)
+    }
+  })
+  r.pipe(w)
+  r.once('now-paused', () => {
+    setTimeout(() => {
+      t.same(buffered, expected)
+      t.end()
+    }, 200)
+  })
+})
